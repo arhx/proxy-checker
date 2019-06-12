@@ -17,8 +17,8 @@ class ProxyChecker {
 		'check'  => [ 'get', 'post', 'cookie', 'referer', 'user_agent' ],
 	];
 
-	public function __construct( $proxyCheckUrl, array $config = [] ) {
-		$this->proxyCheckUrl = $proxyCheckUrl;
+	public function __construct( $check_page, array $config = [] ) {
+		$this->proxyCheckUrl = $check_page;
 		$this->setConfig( $config );
 	}
 
@@ -26,35 +26,20 @@ class ProxyChecker {
 		$this->config = array_merge( $this->config, $config );
 	}
 
-	public function checkProxies( array $proxies ) {
-		$results = [];
-
-		foreach ( $proxies as $proxy ) {
-
-			try {
-				if ( ! empty( $proxy ) ) {
-					$results[ $proxy ] = $this->checkProxy( $proxy );
-				}
-			} catch ( \Exception $e ) {
-				$results[ $proxy ]['error'] = $e->getMessage();
-			}
-		}
-
-		return $results;
-	}
-
 	/**
 	 * @param $proxy
+	 * @param $error_message
 	 *
 	 * @return array|bool
 	 * @throws \GuzzleHttp\Exception\GuzzleException
 	 */
-	public function checkProxy( $proxy ) {
+	public function checkProxy( $proxy, &$error_message ) {
 		try{
 			$response = $this->getProxyContent( $proxy );
 			$result = $this->checkProxyContent( $response );
 			return $result;
 		}catch (\Exception $exception){
+			$error_message = $exception->getMessage();
 			return false;
 		}
 	}

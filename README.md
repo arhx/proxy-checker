@@ -1,124 +1,78 @@
-Proxy Checker Laravel Version: 0.2 
+Arhx ProxyChecker
 ==========================
 
-Service Provider for Proxy Checking (type - http, socks4, socks5) that returns all the necessary information related to each proxy(s) for Laravel PHP Framework [ [Packagist] ]
+Service for Proxy Checking that returns all the necessary information related to each proxy(s)
 
-[Packagist]: <https://packagist.org/packages/sahusoftcom/proxy-checker>
+[Packagist]: <https://packagist.org/packages/arhx/proxy-checker>
 
 ## Installation
 
 Type the following command in your project directory
 
-`composer require sahusoftcom/proxy-checker`
-
-OR
-
-Add the following line to the `require` section of `composer.json`:
-
-```json
-{
-    "require": {
-        "sahusoftcom/proxy-checker": "dev-master"
-    }
-}
-```
-
-## Setup
-
-In `/config/app.php`, add the following to `providers`:
-  
-```php
-SahusoftCom\ProxyChecker\ProxyCheckerServiceProvider::class
-```
+`composer require arhx/proxy-checker`
 
 ## How to use
 
-1. You should use the class `SahusoftCom\ProxyChecker\ProxyCheckerService`
-2. Pass `$url` & `$config` parameter in `ProxyCheckerService` class
+1. You should use the class `Arhx\ProxyChecker\ProxyChecker`
+2. Pass `$url` & `$config` parameter in `ProxyChecker` class
 
-	```php
-		/*
-		*	$config [optional]
-		*/
-		$config = [
-			'timeout'   => 100,
-			'check'     => ['get', 'post', 'cookie', 'referer', 'user_agent'],
-		    ];
+```php
+/*
+*	$check_page [required]
+*	$config [optional]
+*/
+    $check_page = 'http://myproxychecker.com/check.php';
+    $config = [
+        'timeout'   => 100,
+        'check'     => ['get', 'post', 'cookie', 'referer', 'user_agent'],
+    ];
+    $checker = new ProxyChecker($check_page, $config);
 
-		/*
-		*	$url [required1]
-		*/
-		$url = "https://www.google.com";
-		
-		$proxies = [
-			'XXX.XXX.XXX.XXX:XXXX,username:password,Socks4',
-			'XXX.XXX.XXX.XXX:XXXX,username:password,Socks5',
-			'XXX.XXX.XXX.XXX:XXXX'
-		];
+/*
+*	$proxy [required]
+*	&$error_message [optional]
+*
+*/
+$proxy = 'protocol://username:password@hostname:port';
 
-		$proxyCheckObject = new ProxyCheckerService($url, $config);
-		$result = $proxyCheckObject->checkProxies($proxies);
+$result = $checker->checkProxy($proxy, $error_message);
 
-		echo "<pre>";
-		print_r($result);
-		echo "</pre>";
-	```
+if($result){
+    print_r($result);
+}else{
+    echo "Error: $error_message\n";
+}
+```
 
- ## Sample Output
+## Sample Output
  
  ```
 Array
-	(
-		[XXX.XXX.XXX.XXX:XXXX,username:password] => Array
-			(
-				[allowed] => Array
-					(
-					)
+(
+    [allowed] => Array
+        (
+            [0] => get
+            [1] => post
+            [2] => cookie
+            [3] => referer
+            [4] => user_agent
+        )
 
-				[disallowed] => Array
-					(
-						[0] => get
-						[1] => post
-						[2] => cookie
-						[3] => referer
-						[4] => user_agent
-					)
+    [disallowed] => Array
+        (
+        )
 
-				[proxy_level] => 
-				[info] => Array
-					(
-						[url] => https://www.google.com/
-						[content_type] => text/html; charset=UTF-8
-						[http_code] => 200
-						[header_size] => 1070
-						[request_size] => 418
-						[filetime] => -1
-						[ssl_verify_result] => 0
-						[redirect_count] => 0
-						[total_time] => 2.055918
-						[namelookup_time] => 0.007662
-						[connect_time] => 0.313878
-						[pretransfer_time] => 1.490388
-						[size_upload] => 0
-						[size_download] => 11431
-						[speed_download] => 5560
-						[speed_upload] => 0
-						[download_content_length] => -1
-						[upload_content_length] => -1
-						[starttransfer_time] => 1.758965
-						[redirect_time] => 0
-						[redirect_url] => 
-						[primary_ip] => XXX.XXX.XXX.XXX
-						[certinfo] => Array
-							(
-							)
+    [proxy_level] => elite
+)
 
-						[primary_port] => 8080
-						[local_ip] => XXX.XXX.X.XXX
-						[local_port] => XXXXX
-					)
+```
 
-			)
-
-	)
+## Check page example
+```php
+<?php
+// possible url for this file: http://myproxychecker.com/check.php
+include 'vendor/autoload.php';
+$checkResult = \Arhx\ProxyChecker\ProxyChecker::checkPage();
+$checkResult = implode(PHP_EOL,$checkResult);
+echo $checkResult;
 ```
