@@ -1,19 +1,22 @@
 {
-    "name": "sahusoftcom/proxy-checker",
-    "description": "PHP (Laravel) Package to check proxy status with all the necessary details",
+    "name": "arhx/proxy-checker",
+    "description": "PHP Package to check proxy status with all the necessary details",
     "authors": [
         {
-            "name": "faizahmedfarooqui",
-            "email": "faiz@sahusoft.com"
+            "name": "Arhangelx",
+            "email": "arhx.dev@gmail.com"
         }
     ],
     "require": {
         "php": ">=5.5.9",
-        "laravel/framework": "^5.1"
+        "guzzlehttp/guzzle": "^6.3"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "~6.0"
     },
     "autoload": {
         "psr-4": {
-            "SahusoftCom\\ProxyChecker\\": "src/"
+            "Arhx\\ProxyChecker\\": "src/"
         }
     }
 }
