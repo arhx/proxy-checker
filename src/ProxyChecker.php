@@ -33,7 +33,7 @@ class ProxyChecker {
 	 * @return array|bool
 	 * @throws \GuzzleHttp\Exception\GuzzleException
 	 */
-	public function checkProxy( $proxy, &$error_message ) {
+	public function checkProxy( $proxy, &$error_message = null ) {
 		try{
 			$response = $this->getProxyContent( $proxy );
 			$result = $this->checkProxyContent( $response );
