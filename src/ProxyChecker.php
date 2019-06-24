@@ -2,28 +2,72 @@
 
 namespace Arhx\ProxyChecker;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Cookie\CookieJar;
-use GuzzleHttp\Psr7\Response;
-
 class ProxyChecker {
 	private $proxyCheckUrl;
 
-	private $config = [
-		'guzzle' => [
-			'connect_timeout' => 5,
-			'read_timeout'    => 10,
-		],
+	private $options = [
+		'timeout' => 10,
 		'check'  => [ 'get', 'post', 'cookie', 'referer', 'user_agent' ],
 	];
 
-	public function __construct( $check_page, array $config = [] ) {
+	public function __construct( $check_page, array $options = [] ) {
 		$this->proxyCheckUrl = $check_page;
-		$this->setConfig( $config );
+		$this->setOptions( $options );
 	}
 
-	public function setConfig( array $config ) {
-		$this->config = array_merge( $this->config, $config );
+	public function setOptions( array $options ) {
+		$this->options = $options + $this->options;
+	}
+	public function getOption($key, $default = null){
+		return isset($this->options[$key]) ? $this->options[$key] : $default;
+	}
+
+	/**
+	 * @param array $proxies
+	 * @param array $errors
+	 *
+	 * @return array
+	 */
+	public function checkMultipleProxy( array $proxies, &$errors = []) {
+
+		$multi = curl_multi_init();
+		$channels = array();
+
+// Loop through the URLs, create curl-handles
+// and attach the handles to our multi-request
+		foreach ($proxies as $i => $proxy) {
+			$ch = $this->makeCurlHandler($proxy);
+
+			curl_multi_add_handle($multi, $ch);
+
+			$channels[$i] = $ch;
+		}
+
+// While we're still active, execute curl
+		do {
+			$status = curl_multi_exec($multi, $active);
+			if ($active) {
+				// Ждем какое-то время для оживления активности
+				curl_multi_select($multi);
+			}
+		} while ($active && $status == CURLM_OK);
+
+// Loop through the channels and retrieve the received
+// content, then remove the handle from the multi-handle
+		$results = [];
+		foreach ($channels as $i => $channel) {
+			$content = curl_multi_getcontent($channel);
+			try{
+				$results[$i] = $this->checkProxyContent($content);
+			}catch (\Exception $exception){
+				$results[$i] = false;
+				$errors[$i] = $exception->getMessage();
+			}
+			curl_multi_remove_handle($multi, $channel);
+		}
+// Close the multi-handle and return our results
+		curl_multi_close($multi);
+		return $results;
 	}
 
 	/**
@@ -31,9 +75,9 @@ class ProxyChecker {
 	 * @param $error_message
 	 *
 	 * @return array|bool
-	 * @throws \GuzzleHttp\Exception\GuzzleException
 	 */
 	public function checkProxy( $proxy, &$error_message = null ) {
+		$error_message = null;
 		try{
 			$response = $this->getProxyContent( $proxy );
 			$result = $this->checkProxyContent( $response );
@@ -44,71 +88,69 @@ class ProxyChecker {
 		}
 	}
 
-	/**
-	 * @param $proxy
-	 *
-	 * @return Response
-	 * @throws \GuzzleHttp\Exception\GuzzleException
-	 */
 	private function getProxyContent( $proxy ) {
-		$guzzleConfig          = $this->config['guzzle'];
-		if($proxy){
-			$guzzleConfig['proxy'] = $proxy;
-		}
-		if ( ! isset( $guzzleConfig['headers'] ) ) {
-			$guzzleConfig['headers'] = [];
-		}
+		$ch = $this->makeCurlHandler($proxy);
 
-
-		// check cookie
-		if ( in_array( 'cookie', $this->config['check'] ) ) {
-			$domain = parse_url( $this->proxyCheckUrl, PHP_URL_HOST );
-
-			$cookieJar = CookieJar::fromArray( [
-				'c' => 'cookie'
-			], $domain );
-
-			$guzzleConfig['cookies'] = $cookieJar;
-		}
+		$body = curl_exec($ch);
+		//$headers = curl_getinfo($ch, CURLINFO_HEADER_OUT);
+		curl_close($ch);
+		return $body;
+	}
+	private function makeCurlHandler($proxy){
+		$timeout = $this->getOption('timeout', 30);
+		$check = $this->getOption('check', []);
 
 		$url = $this->proxyCheckUrl;
-		$method = 'GET';
-		$requestOptions = [];
-
 		// check get
-		if ( in_array( 'get', $this->config['check'] ) ) {
+		if ( in_array( 'get', $check ) ) {
 			$url .= '?q=query';
 		}
-
-		// check post
-		if ( in_array( 'post', $this->config['check'] ) ) {
-			$method = 'POST';
-			$requestOptions['form_params'] = [
-					'r' => 'request',
-				];
+		$ch = curl_init ($url);
+		if($proxy){
+			curl_setopt($ch, CURLOPT_PROXY, $proxy);
 		}
+
+		$headers = [];
 		// check referer
-		if ( in_array( 'referer', $this->config['check'] ) ) {
-			$guzzleConfig['headers']['Referer'] = 'http://www.google.com/';
+		if ( in_array( 'referer', $check ) ) {
+			$headers[] = "Referer: http://www.google.com/";
 		}
 
 		// check user_agent
-		if ( in_array( 'user_agent', $this->config['check'] ) ) {
-			$guzzleConfig['headers']['User-Agent'] = 'Mozilla/5.0';
+		if ( in_array( 'user_agent', $check ) ) {
+			$headers[] = "User-Agent: Mozilla/5.0";
 		}
-		$client = new Client( $guzzleConfig );
+		// check cookie
+		if ( in_array( 'cookie', $check ) ) {
+			$headers[] = "Cookie: c=cookie";
+		}
+		if(count($headers) > 0){
+			curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+		}
+		curl_setopt($ch, CURLOPT_TIMEOUT, $timeout);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
 
-		return $client->request( $method, $url, $requestOptions );
+		// check post
+		if ( in_array( 'post', $check ) ) {
+			curl_setopt ($ch, CURLOPT_POST, 1);
+			curl_setopt ($ch, CURLOPT_POSTFIELDS, http_build_query([
+				'r' => 'request'
+			]));
+		}
+
+		curl_setopt($ch, CURLINFO_HEADER_OUT, true);
+		return $ch;
 	}
 
 	/**
-	 * @param Response $response
+	 * @param $content
 	 *
 	 * @return array
 	 * @throws \Exception
 	 */
-	private function checkProxyContent( Response $response ) {
-		$content = $response->getBody()->getContents();
+	private function checkProxyContent( $content ) {
 		if ( ! $content ) {
 			throw new \Exception( 'Empty content' );
 		}
@@ -116,13 +158,9 @@ class ProxyChecker {
 			throw new \Exception( 'Wrong content' );
 		}
 
-		if ( $response->getStatusCode() != 200 ) {
-			throw new \Exception( 'Code invalid: ' . $response->getStatusCode() );
-		}
-
 		$allowed    = [];
 		$disallowed = [];
-		foreach ( $this->config['check'] as $value ) {
+		foreach ( $this->getOption('check',[]) as $value ) {
 			if ( strpos( $content, "allow_$value" ) !== false ) {
 				$allowed[] = $value;
 			} else {
